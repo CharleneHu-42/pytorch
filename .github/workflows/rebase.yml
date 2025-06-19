@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'add_rebase_workflow'
+      - 'rebase_target'
 
 permissions:
   contents: write
@@ -33,6 +33,34 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+    # --- START: Crucial Debugging Steps ---
+      - name: Debug Branch SHAs
+        run: |
+          echo "Adding upstream remote..."
+          git remote add upstream ${UPSTREAM_REPO_URL} || echo "Upstream remote already exists" # Add '|| echo' to prevent failing if remote exists
+          echo "Fetching upstream/${UPSTREAM_BASE_BRANCH}..."
+          git fetch upstream ${UPSTREAM_BASE_BRANCH}
+
+          echo "--- Git States as seen by GitHub Actions ---"
+          echo "Current branch (TARGET_BRANCH - ${{ env.TARGET_BRANCH }}) SHA: $(git rev-parse HEAD)"
+          echo "Upstream base branch (upstream/${{ env.UPSTREAM_BASE_BRANCH }}) SHA: $(git rev-parse upstream/${{ env.UPSTREAM_BASE_BRANCH }})"
+          echo ""
+          echo "Commits in upstream/${{ env.UPSTREAM_BASE_BRANCH }} but NOT in ${{ env.TARGET_BRANCH }} (i.e., new commits upstream has that you need):"
+          git log --oneline ${{ env.TARGET_BRANCH }}..upstream/${{ env.UPSTREAM_BASE_BRANCH }} || echo "No new commits from upstream to apply."
+          echo ""
+          echo "Commits in ${{ env.TARGET_BRANCH }} but NOT in upstream/${{ env.UPSTREAM_BASE_BRANCH }} (i.e., your unique commits to rebase):"
+          git log --oneline upstream/${{ env.UPSTREAM_BASE_BRANCH }}..${{ env.TARGET_BRANCH }} || echo "No unique commits on your target branch."
+          echo ""
+          echo "Rebase dry-run check (will indicate if conflicts are expected):"
+          git rebase --dry-run upstream/${{ env.UPSTREAM_BASE_BRANCH }} 2>&1 || echo "Rebase dry-run completed."
+          echo "--- End Git States ---"
+          
+          # Optional: show remote tracking status
+          echo "Git branch tracking info:"
+          git branch -vv
+
+    # --- END: Crucial Debugging Steps ---
+      
       - name: Attempt rebase
         id: rebase
         run: |
