@@ -1,0 +1,73 @@
+name: Rebase from Upstream
+
+on:
+  schedule:
+    - cron: '0 17 * * 4'
+  workflow_dispatch:
+  push:
+    branches:
+      - 'add_rebase_workflow'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-22.04
+
+    env:
+      TARGET_BRANCH: 'rebase_target'
+      UPSTREAM_BASE_BRANCH: 'main'
+      UPSTREAM_REPO_URL: 'https://github.com/pytorch/pytorch.git'
+
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Attempt rebase
+        id: rebase
+        run: |
+          git remote add upstream ${UPSTREAM_REPO_URL}
+          git fetch upstream
+          set +e
+          git rebase upstream/${UPSTREAM_BASE_BRANCH}
+          echo "REBASE_EXIT_CODE=$?" >> $GITHUB_ENV
+          set -e
+
+      - name: Push if rebase successful
+        if: env.REBASE_EXIT_CODE == '0'
+        run: |
+          git push origin main_next --force-with-lease
+
+      - name: Handle rebase conflict
+        if: env.REBASE_EXIT_CODE != '0'
+        run: |
+          TIMESTAMP=$(date +'%Y%m%d-%H%M')
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          CURRNET_UPSTREAM_BRANCH="upstream-${UPSTREAM_BASE_BRANCH}-$TIMESTAMP"
+          echo "CURRNET_UPSTREAM_BRANCH=$CURRNET_UPSTREAM_BRANCH" >> $GITHUB_ENV
+          git rebase --abort
+          git checkout -b $CURRNET_UPSTREAM_BRANCH upstream/${UPSTREAM_BASE_BRANCH}
+          git push origin $CURRNET_UPSTREAM_BRANCH
+
+      - name: Create PR for conflict resolution
+        if: env.REBASE_EXIT_CODE != '0'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ env.TARGET_BRANCH }}
+          branch: ${{ env.CURRNET_UPSTREAM_BRANCH }}
+          title: "Rebase conflict with upstream/${{ env.UPSTREAM_BASE_BRANCH }} - ${{ env.TIMESTAMP }}"
+          body: |
+            This PR was automatically created because a rebase with upstream/${{ env.UPSTREAM_BASE_BRANCH }} resulted in conflicts.
+            Please resolve the conflicts manually.
+
