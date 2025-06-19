@@ -36,23 +36,26 @@ jobs:
     # --- START: Crucial Debugging Steps ---
       - name: Debug Branch SHAs
         run: |
+          git checkout ${{ env.TARGET_BRANCH }}
+          echo "Checked out branch: $(git rev-parse --abbrev-ref HEAD)"
+
           echo "Adding upstream remote..."
-          git remote add upstream ${UPSTREAM_REPO_URL} || echo "Upstream remote already exists" # Add '|| echo' to prevent failing if remote exists
+          git remote add upstream ${UPSTREAM_REPO_URL} || echo "Upstream remote already exists"
           echo "Fetching upstream/${UPSTREAM_BASE_BRANCH}..."
           git fetch upstream ${UPSTREAM_BASE_BRANCH}
 
           echo "--- Git States as seen by GitHub Actions ---"
-          echo "Current branch (TARGET_BRANCH - ${{ env.TARGET_BRANCH }}) SHA: $(git rev-parse HEAD)"
+          echo "Current branch (${{ env.TARGET_BRANCH }}) SHA: $(git rev-parse ${{ env.TARGET_BRANCH }})"
           echo "Upstream base branch (upstream/${{ env.UPSTREAM_BASE_BRANCH }}) SHA: $(git rev-parse upstream/${{ env.UPSTREAM_BASE_BRANCH }})"
           echo ""
           echo "Commits in upstream/${{ env.UPSTREAM_BASE_BRANCH }} but NOT in ${{ env.TARGET_BRANCH }} (i.e., new commits upstream has that you need):"
-          git log --oneline ${{ env.TARGET_BRANCH }}..upstream/${{ env.UPSTREAM_BASE_BRANCH }} || echo "No new commits from upstream to apply."
+          git log --oneline "${{ env.TARGET_BRANCH }}".."upstream/${{ env.UPSTREAM_BASE_BRANCH }}" || echo "No new commits from upstream to apply."
           echo ""
           echo "Commits in ${{ env.TARGET_BRANCH }} but NOT in upstream/${{ env.UPSTREAM_BASE_BRANCH }} (i.e., your unique commits to rebase):"
-          git log --oneline upstream/${{ env.UPSTREAM_BASE_BRANCH }}..${{ env.TARGET_BRANCH }} || echo "No unique commits on your target branch."
+          git log --oneline "upstream/${{ env.UPSTREAM_BASE_BRANCH }}".."${{ env.TARGET_BRANCH }}" || echo "No unique commits on your target branch."
           echo ""
           echo "Rebase dry-run check (will indicate if conflicts are expected):"
-          git rebase --dry-run upstream/${{ env.UPSTREAM_BASE_BRANCH }} 2>&1 || echo "Rebase dry-run completed."
+          git rebase --dry-run "upstream/${{ env.UPSTREAM_BASE_BRANCH }}" 2>&1 || echo "Rebase dry-run completed."
           echo "--- End Git States ---"
           
           # Optional: show remote tracking status
@@ -64,8 +67,8 @@ jobs:
       - name: Attempt rebase
         id: rebase
         run: |
-          git remote add upstream ${UPSTREAM_REPO_URL}
-          git fetch upstream ${UPSTREAM_BASE_BRANCH}
+          # git remote add upstream ${UPSTREAM_REPO_URL} || echo "Upstream remote already exists"
+          # git fetch upstream ${UPSTREAM_BASE_BRANCH}
           set +e
           git rebase upstream/${UPSTREAM_BASE_BRANCH}
           echo "REBASE_EXIT_CODE=$?" >> $GITHUB_ENV
