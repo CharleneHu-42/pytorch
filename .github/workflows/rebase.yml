@@ -37,7 +37,7 @@ jobs:
         id: rebase
         run: |
           git remote add upstream ${UPSTREAM_REPO_URL}
-          git fetch upstream
+          git fetch upstream ${UPSTREAM_BASE_BRANCH}
           set +e
           git rebase upstream/${UPSTREAM_BASE_BRANCH}
           echo "REBASE_EXIT_CODE=$?" >> $GITHUB_ENV
